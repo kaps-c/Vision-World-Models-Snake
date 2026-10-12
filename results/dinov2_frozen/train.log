@@ -1,0 +1,5 @@
+2026-10-12 17:25:52,768 episodes: 26 train / 6 val
+2026-10-12 17:26:30,212 encoder probe: R2_joint=0.932
+2026-10-12 17:26:30,213 identity_predictor probe: R2_joint=0.907
+2026-10-12 17:26:30,214 identity_displacement probe: R2_joint=0.391
+2026-10-12 17:26:30,214 identity_change probe: R2_joint=-0.000

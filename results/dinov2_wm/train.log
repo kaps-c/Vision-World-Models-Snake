@@ -1,0 +1,9 @@
+2026-10-12 17:26:54,692 7367 train / 1800 val transitions, 7.5M params
+2026-10-12 17:27:28,705 epoch 1  train 4.3795  val mse 1.2813 (identity 0.2234)  cos 0.9221 (0.9836)
+2026-10-12 17:28:00,575 epoch 2  train 0.6398  val mse 0.3840 (identity 0.2234)  cos 0.9736 (0.9836)
+2026-10-12 17:28:33,489 epoch 3  train 0.3150  val mse 0.2844 (identity 0.2234)  cos 0.9797 (0.9836)
+2026-10-12 17:29:05,355 epoch 4  train 0.2570  val mse 0.2486 (identity 0.2234)  cos 0.9822 (0.9836)
+2026-10-12 17:29:40,447 epoch 5  train 0.2408  val mse 0.2433 (identity 0.2234)  cos 0.9826 (0.9836)
+2026-10-12 17:30:51,717 predictor probe: R2_joint=0.923
+2026-10-12 17:30:51,717 displacement probe: R2_joint=0.839
+2026-10-12 17:30:51,718 change probe: R2_joint=0.772

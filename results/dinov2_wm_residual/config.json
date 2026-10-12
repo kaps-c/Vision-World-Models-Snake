@@ -1,0 +1,17 @@
+{
+  "data_dir": "data/episodes",
+  "features_path": "data/features/dinov2_vits14.pt",
+  "run_dir": "results/dinov2_wm_residual",
+  "val_frac": 0.2,
+  "seed": 0,
+  "epochs": 5,
+  "batch_size": 64,
+  "lr": 0.0003,
+  "weight_decay": 0.05,
+  "dim": 384,
+  "depth": 4,
+  "heads": 6,
+  "residual": true,
+  "use_action": true,
+  "device": "cuda"
+}
