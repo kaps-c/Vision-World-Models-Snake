@@ -283,3 +283,53 @@ results are unaffected (seeded), but it matters for any wall-clock comparison.
 **Observation.** Re-running the same seeded config gives train loss 0.6398 vs 0.6406 at
 epoch 2: **cuDNN/bf16 non-determinism**. The probes agree to about 0.001. I report results to
 3 d.p. and don't claim bit-reproducibility.
+
+---
+
+## ⚠ Correction — the displacement and change probes measure the *action*, not dynamics
+
+**How it surfaced.** The first JEPA smoke run (strict-JEPA baseline, slice 5)
+**collapsed**: invariance loss went to ~0, per-dimension std to ~0.05, and the rank
+ratio to 0.39, so the kill-switch fired at epoch 2. Yet its predictions scored
+**0.88 displacement / 0.86 change**. A collapsed model can't know the dynamics, so
+the metric had to be wrong.
+
+**Control.** Ridge from a one-hot of the action (no image at all) to Δhead: **R² = 0.881**
+(0.926 with heading features). Actions are *absolute directions*, so Δhead equals
+the action on every step except KEEP or a reverse. A predictor scores well on
+displacement/change just by passing its action token through to the output.
+
+| | displacement | change |
+|---|---|---|
+| Identity WM | 0.391 | 0.000 |
+| DINOv2-WM direct | 0.838 | 0.771 |
+| DINOv2-WM residual | 0.553 | 0.873 |
+| **Action one-hot, no image** | **0.881** | (same target) |
+| Collapsed strict-JEPA | 0.876 | 0.864 |
+
+**What I got wrong, and what still stands.**
+- ✗ Slice 3b/4 "the direct WM clearly learned action-conditioned dynamics": **not
+  supported**. Neither WM beats the action-only control.
+- ✗ "The change probe is the right dynamics metric": a zero floor for the identity WM
+  isn't enough. It also needs to be immune to action passthrough, and it isn't.
+- ✓ The encoder ceiling (0.932), identity-floor saturation of the original predictor
+  probe (0.907), and the MSE results (only the residual WM beats identity) are
+  unaffected.
+- ✓ The mean-pooling-scale observation (Δ-probe vs pooled probe) is still a real
+  readout effect. It just doesn't show *dynamics*.
+
+**Fix proposed: probe transfer.** Fit the head probe on **real encodings only**
+(`z_t → head_t`), freeze it, and apply it to **predicted** latents `ẑ_{t+1}`. Passing
+the action through doesn't help unless the prediction lands where the *true* next
+frame's encoding lies. Floors: identity WM ≈ "copy current head"; the ceiling is the
+encoder probe. Extending it to open-loop k-step rollouts separates them further.
+
+**Lesson (the big one).** Every probe needs *two* controls: a floor for "knows nothing
+about the state" (identity) **and** a floor for "knows only the input it was given"
+(action-only). I had the first and not the second, so I confidently misread a 0.84.
+The collapsed model was the anomaly that exposed it. **Always run the degenerate
+model through the metric.**
+
+**Talking point.** "My metric said a collapsed model understood the dynamics. That's
+impossible, so I built an action-only control, found that the metric was reading the
+action through the predictor, and replaced it with probe transfer."

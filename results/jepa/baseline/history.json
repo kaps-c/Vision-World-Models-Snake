@@ -1,0 +1,24 @@
+[
+  {
+    "epoch": 1,
+    "train_loss": 0.016588279900009714,
+    "train_invariance": 0.0006635312005601335,
+    "train_variance": 0.9533661247205909,
+    "train_covariance": 0.0009545986781600174,
+    "val_loss": 0.00019948552026309902,
+    "val_invariance": 7.979420774467548e-06,
+    "rank_ratio_min": 0.5,
+    "rank_ratio": 0.846963542139058
+  },
+  {
+    "epoch": 2,
+    "train_loss": 0.0001176702764846559,
+    "train_invariance": 4.706811058035636e-06,
+    "train_variance": 0.8927034098693922,
+    "train_covariance": 0.05468300155748162,
+    "val_loss": 0.00010526309436601069,
+    "val_invariance": 4.2105237621904555e-06,
+    "rank_ratio_min": 0.5,
+    "rank_ratio": 0.3891358733976862
+  }
+]

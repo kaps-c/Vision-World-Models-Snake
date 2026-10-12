@@ -1,0 +1,8 @@
+2026-10-12 17:38:23,365 results/jepa/baseline: 7367 train / 1800 val transitions, 10.2M trainable params
+2026-10-12 17:39:16,985 epoch 1  train 0.0166 (inv 0.0007 var 0.9534 cov 0.0010)  val 0.0002  rank 0.847
+2026-10-12 17:40:09,413 epoch 2  train 0.0001 (inv 0.0000 var 0.8927 cov 0.0547)  val 0.0001  rank 0.389
+2026-10-12 17:40:09,414 COLLAPSE: rank ratio below 0.50, stopping
+2026-10-12 17:40:55,964 encoder probe: R2_joint=0.382
+2026-10-12 17:40:55,964 predictor probe: R2_joint=0.245
+2026-10-12 17:40:55,965 displacement probe: R2_joint=0.876
+2026-10-12 17:40:55,965 change probe: R2_joint=0.864
