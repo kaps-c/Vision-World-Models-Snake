@@ -5,6 +5,10 @@ Two probe families (both fit on mean-pooled patch tokens):
 * **encoder probe**: ``z_t -> head_t`` (does the encoder know where the snake is?)
 * **predictor probe**: ``z_hat_{t+1} -> head_{t+1}`` (does the world model know
   where the snake *will* be?)
+* **displacement probe**: ``z_hat_{t+1} -> head_{t+1} - head_t``. The head moves
+  one cell per step, so copying ``head_t`` already scores R^2 ~ 0.97 on the
+  predictor probe; on displacement that no-op scores ~0, so a positive score
+  isolates knowledge of the dynamics.
 
 ``r2_joint`` is the uniform average of the per-coordinate R^2.
 """
@@ -97,6 +101,15 @@ def predictor_probe_data(
     """Pair ``(T, N, D)`` next-step predictions with next head positions."""
     mask = episode["alive"][1:]
     return _pool(preds)[mask], episode["heads"][1:][mask].astype(np.float64)
+
+
+def displacement_probe_data(
+    preds: torch.Tensor, episode: dict[str, np.ndarray]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Pair ``(T, N, D)`` next-step predictions with head displacements."""
+    mask = episode["alive"][1:]
+    delta = episode["heads"][1:] - episode["heads"][:-1]
+    return _pool(preds)[mask], delta[mask].astype(np.float64)
 
 
 def _pool(tokens: torch.Tensor) -> np.ndarray:

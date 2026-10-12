@@ -65,3 +65,15 @@ def test_evaluate_fits_on_train_episodes_and_scores_val(tmp_path):
     res = evaluate(encoder_probe_data, feats, eps, names[:4], names[4:])
     assert res.r2_joint > 0.99
     assert res.n_val == sum(eps[k]["alive"].sum() for k in names[4:])
+
+
+def test_displacement_probe_data_targets_head_delta(episode):
+    from snekwm.eval.probe import displacement_probe_data
+
+    t = len(episode["actions"])
+    X, y = displacement_probe_data(torch.randn(t, 5, 8), episode)
+    mask = episode["alive"][1:]
+    delta = (episode["heads"][1:] - episode["heads"][:-1])[mask]
+    assert X.shape == (mask.sum(), 8)
+    np.testing.assert_array_equal(y, delta)
+    assert set(np.abs(y).sum(1)) == {1}  # one cell per step

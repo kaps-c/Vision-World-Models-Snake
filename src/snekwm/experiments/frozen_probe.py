@@ -11,7 +11,12 @@ from snekwm.config import ProbeConfig
 from snekwm.data.collect import load_episode
 from snekwm.data.dataset import split_episodes
 from snekwm.data.features import encode_episodes
-from snekwm.eval.probe import encoder_probe_data, evaluate, predictor_probe_data
+from snekwm.eval.probe import (
+    displacement_probe_data,
+    encoder_probe_data,
+    evaluate,
+    predictor_probe_data,
+)
 from snekwm.models.encoders import FrozenDinov2
 from snekwm.results import RunDir
 
@@ -51,6 +56,9 @@ def run_frozen_probe(cfg: ProbeConfig, encoder: nn.Module | None = None) -> dict
         "encoder": evaluate(encoder_probe_data, feats, episodes, train, val),
         "identity_predictor": evaluate(
             predictor_probe_data, identity, episodes, train, val
+        ),
+        "identity_displacement": evaluate(
+            displacement_probe_data, identity, episodes, train, val
         ),
     }
     results = {k: v.to_dict() for k, v in results.items()}
