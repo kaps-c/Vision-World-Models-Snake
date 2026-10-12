@@ -172,3 +172,26 @@ solution, so I added a displacement probe whose trivial baseline is zero."
   instead of renaming, because matching the ecosystem idiom beats the linter here.
 - Windows keeps `train.log` locked while the logger holds it, so `RunDir.close()`
   releases the handlers (otherwise test tmp dirs can't be cleaned).
+
+### Slice 3b — Displacement probe (and a wrong prediction of mine)
+
+Added `displacement_probe_data` (`ẑ_{t+1} → head_{t+1} − head_t`) and reported it for
+the identity WM.
+
+**I predicted the identity floor would be ≈ 0. It is 0.391.** The ≈ 0 figure was for
+*predicting zero displacement*. A *probe* on `z_t` can do better: the frame shows the
+heading (neck → head), and the data policy is predictable (it mostly continues along
+its cycle). So ~40% of displacement variance is guessable from the current state with
+no action.
+
+| Probe (identity WM) | R²_joint | Headroom to a perfect model |
+|---|---|---|
+| predictor (`→ head_{t+1}`) | 0.907 | 0.09 |
+| displacement (`→ Δhead`) | **0.391** | **0.61** |
+
+**Reading.** Displacement is fully determined by (heading, action), so a WM that uses the
+action can approach 1.0. Any score above 0.391 is attributable to the action/dynamics.
+The metric now has about 7× more dynamic range than the original one.
+
+**Lesson.** State the baseline's exact definition before predicting its value: "predict
+zero" and "best linear guess from the current state" are different floors.
