@@ -37,6 +37,10 @@ extend-exclude = ["_reference", "runs"]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "D"]
 ignore = ["D100", "D104", "D105", "D107"]
 
+[tool.ruff.lint.pep8-naming]
+# sklearn convention: X is a feature matrix
+extend-ignore-names = ["X", "X_*"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
@@ -45,4 +49,5 @@ convention = "google"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q -m 'not network'"
+markers = ["network: downloads model weights (deselected by default)"]
