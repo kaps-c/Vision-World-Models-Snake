@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 
-from snekwm.config import CollectConfig, load_config
+from snekwm.config import CollectConfig, ProbeConfig, load_config
 
 
 def _collect(args: argparse.Namespace) -> None:
@@ -23,6 +23,12 @@ def _collect(args: argparse.Namespace) -> None:
     print(f"wrote {len(paths)} episodes to {cfg.out_dir}")
 
 
+def _probe(args: argparse.Namespace) -> None:
+    from snekwm.experiments.frozen_probe import run_frozen_probe
+
+    run_frozen_probe(load_config(args.config, "probe", ProbeConfig))
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     """Parse ``argv`` and run the chosen subcommand."""
     parser = argparse.ArgumentParser(prog="snek")
@@ -30,6 +36,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     p = sub.add_parser("collect", help="roll out the data policy")
     p.add_argument("--config", required=True)
     p.set_defaults(func=_collect)
+    p = sub.add_parser("probe", help="frozen-encoder + identity probes")
+    p.add_argument("--config", required=True)
+    p.set_defaults(func=_probe)
     args = parser.parse_args(argv)
     args.func(args)
 

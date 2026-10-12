@@ -1,0 +1,8 @@
+[probe]
+data_dir = "data/episodes"
+features_path = "data/features/dinov2_vits14.pt"
+run_dir = "results/dinov2_frozen"
+val_frac = 0.2
+seed = 0
+cell_px = 16
+device = "cuda"

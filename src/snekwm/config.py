@@ -22,6 +22,19 @@ class CollectConfig:
     out_dir: str = "data/episodes"
 
 
+@dataclass(frozen=True)
+class ProbeConfig:
+    """Settings for frozen-encoder probing."""
+
+    data_dir: str = "data/episodes"
+    features_path: str = "data/features/dinov2_vits14.pt"
+    run_dir: str = "results/dinov2_frozen"
+    val_frac: float = 0.2
+    seed: int = 0
+    cell_px: int = 16
+    device: str = "cuda"
+
+
 def load_config(path: str | Path, section: str, cls: type[T]) -> T:
     """Build ``cls`` from ``[section]`` of a TOML file.
 
