@@ -153,3 +153,17 @@ def test_action_only_control_reads_absolute_actions(tmp_path):
 
     eps, _, train, val = _linear_world(tmp_path)
     assert action_only_control(eps, train, val).r2_joint > 0.7
+
+
+def test_normalised_transfer_ignores_per_token_scale(tmp_path):
+    from snekwm.eval.probe import transfer_probe
+
+    eps, feats, train, val = _linear_world(tmp_path)
+    feats = {k: v + torch.tensor([0.0, 0.0, 3.0, 0.0]) for k, v in feats.items()}
+    preds = {k: v[1:] for k, v in feats.items()}
+    scaled = {k: v * 1000 for k, v in preds.items()}
+    a = transfer_probe(preds, feats, eps, train, val, normalize=True)
+    b = transfer_probe(scaled, feats, eps, train, val, normalize=True)
+    assert a["transfer"].r2_joint == pytest.approx(b["transfer"].r2_joint, abs=1e-6)
+    raw = transfer_probe(scaled, feats, eps, train, val, normalize=False)
+    assert raw["transfer"].r2_joint < a["transfer"].r2_joint

@@ -138,6 +138,7 @@ def transfer_probe(
     episodes: Mapping[str, dict[str, np.ndarray]],
     train: Sequence[str],
     val: Sequence[str],
+    normalize: bool = False,
 ) -> dict[str, ProbeResult]:
     """Decode predicted latents with a head probe fit on real encodings only.
 
@@ -147,6 +148,11 @@ def transfer_probe(
         episodes: Episode arrays keyed by name.
         train: Episodes used to fit the probe (on ``reference`` only).
         val: Held-out episodes the predictions are scored on.
+        normalize: L2-normalise every token of both ``preds`` and ``reference``
+            first. Use it when the model was trained with a scale-invariant loss
+            (JEPA's normalised invariance), which never constrains the scale of
+            its predictions; decoding raw predictions would then penalise a
+            quantity the model was never asked to match.
 
     Returns:
         ``transfer``: decoded ``P(z_hat_{t+1})`` vs ``head_{t+1}`` (identity
@@ -154,6 +160,15 @@ def transfer_probe(
         ``transfer_displacement``: ``P(z_hat_{t+1}) - P(z_t)`` vs the true
         displacement (identity world model scores 0).
     """
+    if normalize:
+        preds = {
+            k: torch.nn.functional.normalize(v.float(), dim=-1)
+            for k, v in preds.items()
+        }
+        reference = {
+            k: torch.nn.functional.normalize(v.float(), dim=-1)
+            for k, v in reference.items()
+        }
     X, y = zip(
         *(encoder_probe_data(reference[n], episodes[n]) for n in train), strict=True
     )

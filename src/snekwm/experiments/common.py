@@ -69,6 +69,7 @@ def probe_dynamics(
     episodes: Episodes,
     train: Sequence[str],
     val: Sequence[str],
+    normalize_transfer: bool = False,
 ) -> dict[str, dict]:
     """All prediction probes (predictor, displacement, change, transfer).
 
@@ -80,7 +81,9 @@ def probe_dynamics(
         "predictor": evaluate(predictor_probe_data, preds, episodes, train, val),
         "displacement": evaluate(displacement_probe_data, preds, episodes, train, val),
         "change": evaluate(displacement_probe_data, deltas, episodes, train, val),
-        **transfer_probe(preds, reference, episodes, train, val),
+        **transfer_probe(
+            preds, reference, episodes, train, val, normalize=normalize_transfer
+        ),
     }
     return {k: v.to_dict() for k, v in probes.items()}
 
