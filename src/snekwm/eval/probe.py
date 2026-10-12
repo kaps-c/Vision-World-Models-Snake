@@ -9,6 +9,10 @@ Two probe families (both fit on mean-pooled patch tokens):
   one cell per step, so copying ``head_t`` already scores R^2 ~ 0.97 on the
   predictor probe; on displacement that no-op scores ~0, so a positive score
   isolates knowledge of the dynamics.
+* **change probe**: the displacement probe on ``z_hat_{t+1} - z_t`` (see
+  :func:`change_tensors`). Mean-pooling a full prediction lets the large,
+  static ``z_t`` drown out the small predicted change; probing the change
+  itself removes that, and the identity world model scores exactly 0.
 
 ``r2_joint`` is the uniform average of the per-coordinate R^2.
 """
@@ -110,6 +114,13 @@ def displacement_probe_data(
     mask = episode["alive"][1:]
     delta = episode["heads"][1:] - episode["heads"][:-1]
     return _pool(preds)[mask], delta[mask].astype(np.float64)
+
+
+def change_tensors(
+    preds: Mapping[str, torch.Tensor], feats: Mapping[str, torch.Tensor]
+) -> dict[str, torch.Tensor]:
+    """Return predicted changes ``z_hat_{t+1} - z_t`` per episode, ``(T, N, D)``."""
+    return {k: preds[k].float() - feats[k][:-1].float() for k in preds}
 
 
 def _pool(tokens: torch.Tensor) -> np.ndarray:

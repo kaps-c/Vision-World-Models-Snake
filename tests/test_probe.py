@@ -77,3 +77,24 @@ def test_displacement_probe_data_targets_head_delta(episode):
     assert X.shape == (mask.sum(), 8)
     np.testing.assert_array_equal(y, delta)
     assert set(np.abs(y).sum(1)) == {1}  # one cell per step
+
+
+def test_change_tensors_subtract_current_frame():
+    from snekwm.eval.probe import change_tensors
+
+    feats = {"e": torch.randn(4, 3, 2)}
+    preds = {"e": feats["e"][:-1] + 1.0}
+    torch.testing.assert_close(change_tensors(preds, feats)["e"], torch.ones(3, 3, 2))
+
+
+def test_identity_world_model_scores_zero_on_change_probe(tmp_path):
+    from snekwm.eval.probe import change_tensors, displacement_probe_data, evaluate
+
+    paths = collect(tmp_path, size=6, episodes=6, max_steps=60, epsilon=0.3, seed=0)
+    eps = {p.stem: load_episode(p) for p in paths}
+    feats = {k: torch.randn(len(e["frames"]), 3, 4) for k, e in eps.items()}
+    identity = {k: v[:-1] for k, v in feats.items()}
+    names = sorted(eps)
+    deltas = change_tensors(identity, feats)
+    res = evaluate(displacement_probe_data, deltas, eps, names[:4], names[4:])
+    assert abs(res.r2_joint) < 0.05
