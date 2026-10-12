@@ -127,3 +127,48 @@ pure cycle). **Lesson:** ask "would this test fail without the feature?"
 
 **Talking point.** "I found the data was 82% vertical moves, which would let a world
 model ignore actions and still score well. It led me back to a spec mismatch."
+
+---
+
+## Slice 3 — Frozen DINOv2, identity floor, linear probes
+
+**What.**
+- `FrozenDinov2`: `torch.hub` ViT-S/14, ImageNet normalisation, frozen, and stays in eval
+  mode even under `.train()`. The backbone is injectable, so unit tests use a fake one
+  (no download in CI). The real-weights test is marked `network`.
+- `encode_episodes`: caches `(T+1, 256, 384)` fp16 tokens per episode (1.7 GB for
+  9.2k frames; about 85 s on an RTX 3070 Ti Laptop).
+- `fit_probe`: StandardScaler + RidgeCV (α ∈ logspace(−3, 4)) on **mean-pooled**
+  tokens, R² per coordinate, and `r2_joint` = uniform mean. Fit on train episodes,
+  scored on held-out episodes.
+- `snek probe` writes `results/dinov2_frozen/{config.json, probe.json, train.log}`.
+
+**Result.**
+| Probe | R²_x | R²_y | R²_joint | Original write-up |
+|---|---|---|---|---|
+| Frozen DINOv2 encoder (`z_t → head_t`) | 0.946 | 0.917 | **0.932** | 0.927 ✓ |
+| Identity predictor (`ẑ_{t+1}=z_t → head_{t+1}`) | 0.925 | 0.890 | **0.907** | not reported |
+
+**Finding: the predictor probe, as specified, is nearly saturated by a no-op.**
+- Predicting `head_{t+1} = head_t` *exactly*, with no model at all, scores
+  **R² = 0.968**, because the head moves at most one cell out of 14 per step.
+- So the identity WM gets 0.907 on the "does the predictor know where the snake will be"
+  probe while knowing **nothing** about dynamics.
+- Consequence for the original numbers: predictor probes of 0.80 (frozen-DINOv2 JEPA)
+  and 0.32 (SmallViT recipe) sit **below** the identity floor in this setup. A low
+  predictor-probe score therefore indicates lost *position* information, not
+  necessarily missing *dynamics*. The original "no-action → 0.04" collapse is still a
+  real failure, but the metric can't show what a *working* predictor learned.
+- **Proposed fix:** also probe the **displacement** `Δhead = head_{t+1} − head_t`. Predicting
+  zero displacement scores R² ≈ 0.000, so the floor sits at zero and any positive
+  score is dynamics knowledge.
+
+**Talking point.** "My reproduced ceiling matched the paper to 0.005. The identity
+baseline showed the paper's predictor metric was dominated by a copy-the-input
+solution, so I added a displacement probe whose trivial baseline is zero."
+
+**Small failures.**
+- ruff's pep8-naming flagged sklearn's `X` convention. I whitelisted `X`/`X_*`
+  instead of renaming, because matching the ecosystem idiom beats the linter here.
+- Windows keeps `train.log` locked while the logger holds it, so `RunDir.close()`
+  releases the handlers (otherwise test tmp dirs can't be cleaned).
