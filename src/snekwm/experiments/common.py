@@ -15,6 +15,7 @@ from snekwm.eval.probe import (
     displacement_probe_data,
     evaluate,
     predictor_probe_data,
+    transfer_probe,
 )
 
 Predictor = Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
@@ -69,7 +70,7 @@ def probe_dynamics(
     train: Sequence[str],
     val: Sequence[str],
 ) -> dict[str, dict]:
-    """Predictor, displacement and change probes for one set of predictions.
+    """All prediction probes (predictor, displacement, change, transfer).
 
     ``reference`` holds the per-frame embeddings the predictions live next to
     (the target space); the change probe uses ``preds - reference[:-1]``.
@@ -79,6 +80,7 @@ def probe_dynamics(
         "predictor": evaluate(predictor_probe_data, preds, episodes, train, val),
         "displacement": evaluate(displacement_probe_data, preds, episodes, train, val),
         "change": evaluate(displacement_probe_data, deltas, episodes, train, val),
+        **transfer_probe(preds, reference, episodes, train, val),
     }
     return {k: v.to_dict() for k, v in probes.items()}
 

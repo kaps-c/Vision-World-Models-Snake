@@ -20,9 +20,9 @@ def test_frozen_probe_writes_encoder_and_identity_results(tmp_path):
     out = run_frozen_probe(cfg, encoder=FrozenDinov2(backbone=FakeBackbone()))
     saved = json.loads((tmp_path / "run" / "probe.json").read_text())
     assert saved == out
-    assert {"encoder", "identity_predictor", "identity_displacement"} <= set(saved)
+    assert {"encoder", "identity", "action_only"} <= set(saved)
+    assert {"transfer", "transfer_displacement"} <= set(saved["identity"])
     assert "r2_joint" in saved["encoder"]
     assert (tmp_path / "f.pt").exists()
     assert (tmp_path / "run" / "train.log").exists()
-    assert "identity_change" in saved
     assert "| Model |" in (tmp_path / "run" / "summary.md").read_text(encoding="utf-8")

@@ -8,17 +8,10 @@ import torch
 from torch import nn
 
 from snekwm.config import ProbeConfig
-from snekwm.data.collect import load_episode
-from snekwm.data.dataset import split_episodes
 from snekwm.data.features import encode_episodes
-from snekwm.eval.probe import (
-    change_tensors,
-    displacement_probe_data,
-    encoder_probe_data,
-    evaluate,
-    predictor_probe_data,
-)
+from snekwm.eval.probe import action_only_control, encoder_probe_data, evaluate
 from snekwm.eval.report import probe_table
+from snekwm.experiments.common import load_split, probe_dynamics
 from snekwm.models.encoders import FrozenDinov2
 from snekwm.results import RunDir
 
@@ -46,48 +39,39 @@ def run_frozen_probe(cfg: ProbeConfig, encoder: nn.Module | None = None) -> dict
     """
     run = RunDir(cfg.run_dir)
     run.write_json("config.json", cfg)
-    paths = sorted(Path(cfg.data_dir).glob("*.npz"))
-    episodes = {p.stem: load_episode(p) for p in paths}
-    train, val = split_episodes(paths, cfg.val_frac, cfg.seed)
-    train, val = [p.stem for p in train], [p.stem for p in val]
+    episodes, train, val = load_split(cfg.data_dir, cfg.val_frac, cfg.seed)
     run.log.info("episodes: %d train / %d val", len(train), len(val))
 
     feats = load_or_encode(cfg, encoder)
     identity = {k: v[:-1] for k, v in feats.items()}
     results = {
-        "encoder": evaluate(encoder_probe_data, feats, episodes, train, val),
-        "identity_predictor": evaluate(
-            predictor_probe_data, identity, episodes, train, val
-        ),
-        "identity_displacement": evaluate(
-            displacement_probe_data, identity, episodes, train, val
-        ),
-        "identity_change": evaluate(
-            displacement_probe_data,
-            change_tensors(identity, feats),
-            episodes,
-            train,
-            val,
-        ),
+        "encoder": evaluate(encoder_probe_data, feats, episodes, train, val).to_dict(),
+        "identity": probe_dynamics(identity, feats, episodes, train, val),
+        "action_only": {
+            "displacement": action_only_control(episodes, train, val).to_dict()
+        },
     }
-    results = {k: v.to_dict() for k, v in results.items()}
-    for name, r in results.items():
-        run.log.info("%s probe: R2_joint=%.3f", name, r["r2_joint"])
+    run.log.info("encoder probe: R2_joint=%.3f", results["encoder"]["r2_joint"])
+    for name, r in results["identity"].items():
+        run.log.info("identity %s: R2_joint=%.3f", name, r["r2_joint"])
+    run.log.info(
+        "action-only displacement: R2_joint=%.3f",
+        results["action_only"]["displacement"]["r2_joint"],
+    )
     run.write_json("probe.json", results)
     table = probe_table(
         {
             "Frozen DINOv2 encoder": {"encoder": results["encoder"]},
-            "Identity WM": {
-                "predictor": results["identity_predictor"],
-                "displacement": results["identity_displacement"],
-                "change": results["identity_change"],
-            },
+            "Identity WM": results["identity"],
+            "Action only (no image)": results["action_only"],
         }
     )
     run.write_text(
         "summary.md",
         "# Frozen DINOv2 probes\n\n"
-        "Held-out linear-probe R²_joint (snake-head position).\n\n" + table,
+        "Held-out linear-probe R²_joint (snake-head position). "
+        "`transfer*` decode predictions with a probe fit on real encodings only.\n\n"
+        + table,
     )
     run.close()
     return results
