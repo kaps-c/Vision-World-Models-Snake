@@ -86,3 +86,44 @@ Actions: KEEP 2%, RIGHT 8%, LEFT 8%, **UP 40%, DOWN 42%**.
 - **No death transitions** at ε=0.1. That's fine for head probes, but the WM never sees
   a terminal frame.
 - ε isn't in the original write-up; 0.1 is my default.
+
+---
+
+## Slice 2b — Fix: the data policy didn't match the spec
+
+**Failure.** Slice 2's policy followed one fixed zig-zag cycle plus ε-noise.
+Re-reading the spec: my original track used "the same PerturbedHamiltonianCycle
+generator as the main system", which (in the team code) means a **random cycle per
+episode** plus **safe shortcuts toward food**, not ε-noise alone. The tell was the
+action histogram: **82% UP/DOWN**, because a fixed zig-zag cycle is mostly vertical.
+
+**Fix (own implementation of the idea).**
+- `random_hamiltonian_cycle`: tile the grid with 2×2 loops, draw a random spanning
+  tree over the blocks (randomised Prim), and bridge adjacent loops along tree edges.
+  Merging loops along a *tree* can't create a second cycle, so the result is
+  provably one Hamiltonian cycle. Tested on 2/4/14 grids × 5 seeds.
+- Safe shortcuts: jump to a neighbour further ahead on the cycle only if it is
+  (a) before the tail (`0 < d < tail_gap`), (b) not past the food, and (c) the body
+  is still in cycle order. That keeps the never-trap guarantee: ε=0 wins on 4×4 and
+  6×6 for 20 seeds each.
+- Kept ε (the write-up's GIF oracle uses "ε=0", so my version had one). The data ε
+  is unknown, so the default is 0.1.
+
+**Before → after** (L=14, 32 eps, ε=0.1):
+| | fixed cycle | random backbone + shortcuts |
+|---|---|---|
+| UP/DOWN share | 82% | 50% (≈25% each direction) |
+| deaths | 0/32 | 7/32 |
+| final length | — | ≈12 (spec: ~14–16 by t=300) |
+
+**Why deaths appeared.** ε-noise can break cycle order. Shortcuts are then disabled
+and the policy falls back to "follow the cycle, or any safe move", and a safe-now
+move can still walk into a dead end. That's acceptable: the WM now sees terminal frames.
+
+**Test that caught a weak test.** My first shortcut test asserted "first food in
+< 64 steps" on 8×8. Pure cycle-following *also* always satisfies that (cycle length
+is 64), so the test couldn't fail. I replaced it with a mean bound (< 16 vs ≈32 for
+pure cycle). **Lesson:** ask "would this test fail without the feature?"
+
+**Talking point.** "I found the data was 82% vertical moves, which would let a world
+model ignore actions and still score well. It led me back to a spec mismatch."
