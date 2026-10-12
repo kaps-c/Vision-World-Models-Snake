@@ -1,0 +1,11 @@
+# Ablation: residual parameterisation z_t + f(z_t, a_t), identity at init.
+[wm]
+features_path = "data/features/dinov2_vits14.pt"
+run_dir = "results/dinov2_wm_residual"
+epochs = 5
+batch_size = 64
+lr = 3e-4
+depth = 4
+dim = 384
+heads = 6
+residual = true

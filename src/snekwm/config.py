@@ -35,6 +35,27 @@ class ProbeConfig:
     device: str = "cuda"
 
 
+@dataclass(frozen=True)
+class WorldModelConfig:
+    """Settings for training a predictor on frozen-encoder features."""
+
+    data_dir: str = "data/episodes"
+    features_path: str = "data/features/dinov2_vits14.pt"
+    run_dir: str = "results/dinov2_wm"
+    val_frac: float = 0.2
+    seed: int = 0
+    epochs: int = 5
+    batch_size: int = 64
+    lr: float = 3e-4
+    weight_decay: float = 0.05
+    dim: int = 384
+    depth: int = 4
+    heads: int = 6
+    residual: bool = False
+    use_action: bool = True
+    device: str = "cuda"
+
+
 def load_config(path: str | Path, section: str, cls: type[T]) -> T:
     """Build ``cls`` from ``[section]`` of a TOML file.
 

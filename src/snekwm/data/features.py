@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -38,3 +39,56 @@ def encode_episodes(
                 chunks.append(encoder(x).half().cpu())
         out[Path(path).stem] = torch.cat(chunks)
     return out
+
+
+class FeatureTransitions:
+    """``(z_t, a_t, z_{t+1})`` minibatches drawn from cached episode features.
+
+    All frames of the selected episodes are concatenated into one tensor on
+    ``device`` (about 1.4 GB fp16 for the L=14 train split), which avoids
+    DataLoader overhead entirely; batches are cast to float32 on the fly.
+    """
+
+    def __init__(
+        self,
+        feats: Mapping[str, torch.Tensor],
+        episodes: Mapping[str, dict[str, np.ndarray]],
+        names: Sequence[str],
+        device: str = "cuda",
+    ):
+        frames, src, dst, actions, offset = [], [], [], [], 0
+        for name in names:
+            f = feats[name]
+            t = len(episodes[name]["actions"])
+            frames.append(f)
+            src.append(torch.arange(offset, offset + t))
+            dst.append(torch.arange(offset + 1, offset + t + 1))
+            actions.append(torch.as_tensor(episodes[name]["actions"]))
+            offset += len(f)
+        self.frames = torch.cat(frames).to(device)
+        self.src = torch.cat(src).to(device)
+        self.dst = torch.cat(dst).to(device)
+        self.actions = torch.cat(actions).long().to(device)
+
+    def __len__(self) -> int:
+        return len(self.src)
+
+    def batches(
+        self,
+        batch_size: int,
+        shuffle: bool = True,
+        generator: torch.Generator | None = None,
+    ) -> Iterator[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        """Yield ``(z_t, a_t, z_{t+1})`` float32 batches."""
+        if shuffle:
+            order = torch.randperm(len(self), generator=generator)
+        else:
+            order = torch.arange(len(self))
+        order = order.to(self.src.device)
+        for i in range(0, len(order), batch_size):
+            idx = order[i : i + batch_size]
+            yield (
+                self.frames[self.src[idx]].float(),
+                self.actions[idx],
+                self.frames[self.dst[idx]].float(),
+            )

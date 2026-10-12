@@ -1,0 +1,11 @@
+# DINOv2-WM: frozen DINOv2 ViT-S/14 + scratch predictor (depth 4, dim 384).
+[wm]
+features_path = "data/features/dinov2_vits14.pt"
+run_dir = "results/dinov2_wm"
+epochs = 5
+batch_size = 64
+lr = 3e-4
+depth = 4
+dim = 384
+heads = 6
+residual = false
