@@ -37,7 +37,7 @@ def run_tiny(tmp_path, **overrides):
 
 def test_pixel_jepa_writes_results_with_all_probes_and_rank_history(tmp_path):
     results, run = run_tiny(tmp_path)
-    assert {"encoder", "predictor", "displacement", "change"} <= set(results)
+    assert {"encoder", "change", "transfer", "transfer_displacement"} <= set(results)
     history = json.loads((run / "history.json").read_text(encoding="utf-8"))
     assert len(history) == 2
     assert {"train_loss", "val_loss", "val_invariance", "rank_ratio"} <= set(history[0])
@@ -51,9 +51,18 @@ def test_frozen_feature_mode_trains_only_the_predictor(tmp_path):
     assert "encoder" in results
 
 
-def test_kill_switch_stops_training_and_is_recorded(tmp_path):
-    results, run = run_tiny(tmp_path, rank_ratio_min=1e9)
+def test_kill_switch_stop_mode_stops_training_and_is_recorded(tmp_path):
+    results, run = run_tiny(tmp_path, rank_ratio_min=1e9, kill_switch="stop")
     assert results["collapsed"] is True
     history = json.loads((run / "history.json").read_text(encoding="utf-8"))
     assert len(history) == 1
     assert "collapse" in (run / "summary.md").read_text(encoding="utf-8").lower()
+
+
+def test_kill_switch_record_mode_trains_full_budget_and_marks_first_collapse(tmp_path):
+    results, run = run_tiny(tmp_path, rank_ratio_min=1e9, kill_switch="record")
+    assert results["collapsed"] is True
+    assert results["first_collapse_epoch"] == 1
+    history = json.loads((run / "history.json").read_text(encoding="utf-8"))
+    assert len(history) == 2
+    assert all(h["collapsed"] for h in history)

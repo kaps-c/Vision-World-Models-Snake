@@ -2,13 +2,16 @@
 
 Per epoch: train loss (and its invariance / variance / covariance parts),
 validation loss, and the online/target effective-rank ratio. The rank-ratio
-kill-switch stops a dimensionally collapsed run early and records it.
+kill-switch flags dimensional collapse; in ``record`` mode (default) the run
+continues so ablations are compared at equal budget, in ``stop`` mode it ends.
 
-After training, four probes:
+After training:
 
-* encoder: online ``z_t -> head_t`` (does the encoder know where the snake is?)
-* predictor / displacement / change: on predictions in the target space,
-  with ``change = z_hat_{t+1} - target(o_t)``.
+* encoder probe: online ``z_t -> head_t`` (does the encoder know the state?)
+* transfer / transfer_displacement: predictions decoded by a probe fit on real
+  target encodings (the dynamics metric, immune to action passthrough)
+* predictor / displacement / change: legacy pooled probes, kept for
+  comparison with the original write-up.
 """
 
 from __future__ import annotations
@@ -48,6 +51,14 @@ PANELS = (
     ),
 )
 RANK_SAMPLE = 4096  # token rows used for the effective-rank SVD
+PROBES = (
+    "encoder",
+    "transfer",
+    "transfer_displacement",
+    "predictor",
+    "displacement",
+    "change",
+)
 
 
 def run_jepa(cfg: JEPAConfig) -> dict:
@@ -72,7 +83,8 @@ def run_jepa(cfg: JEPAConfig) -> dict:
         sum(p.numel() for p in params) / 1e6,
     )
 
-    history, collapsed = [], False
+    history: list[dict] = []
+    first_collapse: int | None = None
     for epoch in range(1, cfg.epochs + 1):
         jepa.train()
         sums = dict.fromkeys(("loss", "inv", "var", "cov"), 0.0)
@@ -109,9 +121,10 @@ def run_jepa(cfg: JEPAConfig) -> dict:
         }
         try:
             row["rank_ratio"] = check_rank_ratio(online, target, cfg.rank_ratio_min)
+            row["collapsed"] = False
         except CollapseError as err:
-            row["rank_ratio"] = err.ratio
-            collapsed = True
+            row["rank_ratio"], row["collapsed"] = err.ratio, True
+            first_collapse = first_collapse or epoch
         history.append(row)
         run.log.info(
             "epoch %d  train %.4f (inv %.4f var %.4f cov %.4f)  val %.4f  rank %.3f",
@@ -123,11 +136,14 @@ def run_jepa(cfg: JEPAConfig) -> dict:
             val_loss,
             row["rank_ratio"],
         )
-        if collapsed:
+        if row["collapsed"]:
             run.log.info(
-                "COLLAPSE: rank ratio below %.2f, stopping", cfg.rank_ratio_min
+                "COLLAPSE: rank ratio below %.2f (%s)",
+                cfg.rank_ratio_min,
+                "stopping" if cfg.kill_switch == "stop" else "recording, continuing",
             )
-            break
+            if cfg.kill_switch == "stop":
+                break
 
     run.write_json("history.json", history)
     torch.save(
@@ -135,9 +151,10 @@ def run_jepa(cfg: JEPAConfig) -> dict:
     )
 
     results = _probe(jepa, inputs, prep, episodes, train, val, cfg)
-    results["collapsed"] = collapsed
+    results["collapsed"] = first_collapse is not None
+    results["first_collapse_epoch"] = first_collapse
     results["rank_ratio"] = history[-1]["rank_ratio"]
-    for name in ("encoder", "predictor", "displacement", "change"):
+    for name in ("encoder", "transfer", "transfer_displacement", "displacement"):
         run.log.info("%s probe: R2_joint=%.3f", name, results[name]["r2_joint"])
     run.write_json("probe.json", results)
     _write_summary(run, cfg, history, results)
@@ -213,12 +230,19 @@ def _probe(jepa: JEPA, inputs, prep, episodes, train, val, cfg) -> dict:
 def _write_summary(run: RunDir, cfg: JEPAConfig, history: list, results: dict) -> None:
     last = history[-1]
     plot_curves(history, run.path / "curves.png", cfg.run_dir, PANELS)
-    status = (
-        f"**COLLAPSE** — rank ratio {last['rank_ratio']:.3f} fell below "
-        f"{cfg.rank_ratio_min} at epoch {last['epoch']}; training stopped."
-        if results["collapsed"]
-        else f"No dimensional collapse (final rank ratio {last['rank_ratio']:.3f})."
-    )
+    if not results["collapsed"]:
+        status = f"No dimensional collapse (final rank ratio {last['rank_ratio']:.3f})."
+    else:
+        action = (
+            "training stopped"
+            if cfg.kill_switch == "stop"
+            else f"recorded; trained the full {last['epoch']} epochs"
+        )
+        status = (
+            f"**COLLAPSE** — rank ratio first fell below {cfg.rank_ratio_min} at "
+            f"epoch {results['first_collapse_epoch']} ({action}); "
+            f"final rank ratio {last['rank_ratio']:.3f}."
+        )
     train_table = metrics_table(
         {
             f"epoch {h['epoch']}": {
@@ -233,7 +257,7 @@ def _write_summary(run: RunDir, cfg: JEPAConfig, history: list, results: dict) -
         },
         label="Epoch",
     )
-    probes = {k: results[k] for k in ("encoder", "predictor", "displacement", "change")}
+    probes = {k: results[k] for k in PROBES}
     run.write_text(
         "summary.md",
         f"# {cfg.run_dir}\n\n"

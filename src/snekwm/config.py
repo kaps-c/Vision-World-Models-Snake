@@ -91,6 +91,9 @@ class JEPAConfig:
     beta: float = 1.0
     use_action: bool = True
     rank_ratio_min: float = 0.5
+    # "record": flag collapse and keep training (equal budget across ablations);
+    # "stop": abort the run at the first collapsed epoch.
+    kill_switch: str = "record"
     device: str = "cuda"
 
 
