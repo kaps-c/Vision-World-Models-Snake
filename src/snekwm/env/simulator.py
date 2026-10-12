@@ -34,6 +34,33 @@ class State:
         return self.snake[0]
 
 
+def next_heading(state: State, action: int) -> Cell:
+    """Return the heading after ``action``; reversing into the neck is ignored."""
+    requested = ACTIONS[action]
+    current = state.heading
+    if requested == (0, 0) or requested == (-current[0], -current[1]):
+        return current
+    return requested
+
+
+def next_head(state: State, action: int) -> Cell:
+    """Return the cell the head moves into after ``action``."""
+    d = next_heading(state, action)
+    return (state.head[0] + d[0], state.head[1] + d[1])
+
+
+def would_die(state: State, action: int, size: int) -> bool:
+    """Return whether ``action`` immediately kills the snake.
+
+    The tail cell is free unless the move eats food (the snake then grows).
+    """
+    head = next_head(state, action)
+    if not (0 <= head[0] < size and 0 <= head[1] < size):
+        return True
+    body = state.snake if head == state.food else state.snake[:-1]
+    return head in body
+
+
 @dataclass(frozen=True)
 class StepResult:
     """Outcome of one :meth:`SnakeEnv.step`."""
@@ -91,8 +118,8 @@ class SnakeEnv:
         if s is None or not s.alive:
             raise RuntimeError("call reset() before stepping a finished episode")
 
-        heading = self._resolve_heading(s.heading, ACTIONS[action])
-        new_head = (s.head[0] + heading[0], s.head[1] + heading[1])
+        heading = next_heading(s, action)
+        new_head = next_head(s, action)
         ate = new_head == s.food
         body = s.snake if ate else s.snake[:-1]
         snake = (new_head, *body)
@@ -132,9 +159,3 @@ class SnakeEnv:
             if (r, c) not in occupied
         ]
         return self.rng.choice(free) if free else None
-
-    @staticmethod
-    def _resolve_heading(current: Cell, requested: Cell) -> Cell:
-        if requested == (0, 0) or requested == (-current[0], -current[1]):
-            return current
-        return requested
