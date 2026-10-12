@@ -1,0 +1,5 @@
+# Ablation: VICReg weight beta = 0.1 (everything else as the recipe).
+[jepa]
+run_dir = "results/jepa/beta_0.1"
+projector = true
+beta = 0.1

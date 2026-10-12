@@ -1,0 +1,6 @@
+# Ablation: predictor gets a constant action token.
+[jepa]
+run_dir = "results/jepa/no_action"
+projector = true
+beta = 1.0
+use_action = false

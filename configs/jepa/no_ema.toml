@@ -1,0 +1,6 @@
+# Ablation: no EMA target (momentum 0 -> stop-grad copy of the online encoder).
+[jepa]
+run_dir = "results/jepa/no_ema"
+projector = true
+beta = 1.0
+momentum = 0.0

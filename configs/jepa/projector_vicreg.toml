@@ -1,0 +1,5 @@
+# Recipe: + asymmetric projector (d -> d/4 -> d) + VICReg (lam=mu=25, nu=1).
+[jepa]
+run_dir = "results/jepa/projector_vicreg"
+projector = true
+beta = 1.0

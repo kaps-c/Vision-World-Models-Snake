@@ -1,0 +1,6 @@
+# Ablation: frozen DINOv2 as online (and target) encoder; only predictor + projector train.
+[jepa]
+run_dir = "results/jepa/frozen_dinov2"
+encoder = "dinov2"
+projector = true
+beta = 0.0

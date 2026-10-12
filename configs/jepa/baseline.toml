@@ -1,0 +1,5 @@
+# Strict-JEPA baseline: EMA target + predictor, invariance loss only.
+[jepa]
+run_dir = "results/jepa/baseline"
+projector = false
+beta = 0.0
