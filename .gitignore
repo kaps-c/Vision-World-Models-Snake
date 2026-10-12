@@ -1,0 +1,29 @@
+# teammate reference material — never commit
+/_reference/
+/runs/
+
+# python
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# experiment outputs (large; regenerate via CLI)
+/data/
+/results/
+*.pt
+*.npz
+.ipynb_checkpoints/
+
+# latex
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc

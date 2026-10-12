@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snekwm"
+version = "0.1.0"
+description = "Vision world models for Snake: strict-JEPA vs DINOv2 world models at L=14"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "kaps-c" }]
+license = { text = "MIT" }
+dependencies = [
+    "torch>=2.4",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "optuna>=3.6",
+    "imageio>=2.34",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+snek = "snekwm.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = ["_reference", "runs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "D"]
+ignore = ["D100", "D104", "D105", "D107"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
