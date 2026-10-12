@@ -55,5 +55,7 @@ def test_run_writes_history_checkpoint_and_probes(tmp_path):
     assert {"train_loss", "val_mse", "val_cos", "identity_mse"} <= set(history[0])
     assert history[-1]["train_loss"] < history[0]["train_loss"]
     probe = json.loads((run / "probe.json").read_text())
-    assert {"predictor", "displacement"} <= set(probe)
-    assert (run / "final.pt").exists() and (run / "train.log").exists()
+    assert {"predictor", "displacement", "change"} <= set(probe)
+    for name in ("final.pt", "train.log", "summary.md", "curves.png"):
+        assert (run / name).exists()
+    assert "Identity WM" in (run / "summary.md").read_text(encoding="utf-8")

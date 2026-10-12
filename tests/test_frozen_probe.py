@@ -24,3 +24,5 @@ def test_frozen_probe_writes_encoder_and_identity_results(tmp_path):
     assert "r2_joint" in saved["encoder"]
     assert (tmp_path / "f.pt").exists()
     assert (tmp_path / "run" / "train.log").exists()
+    assert "identity_change" in saved
+    assert "| Model |" in (tmp_path / "run" / "summary.md").read_text(encoding="utf-8")

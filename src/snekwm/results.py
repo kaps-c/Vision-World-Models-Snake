@@ -29,7 +29,11 @@ class RunDir:
         """Write ``obj`` (dataclasses allowed) to ``<run>/<name>``."""
         if is_dataclass(obj):
             obj = asdict(obj)
-        (self.path / name).write_text(json.dumps(obj, indent=2))
+        self.write_text(name, json.dumps(obj, indent=2))
+
+    def write_text(self, name: str, text: str) -> None:
+        """Write UTF-8 text to ``<run>/<name>`` (Windows defaults to cp1252)."""
+        (self.path / name).write_text(text, encoding="utf-8")
 
     def close(self) -> None:
         """Release log file handles (needed on Windows before deleting)."""

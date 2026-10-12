@@ -2,28 +2,40 @@
 
 Reports, per epoch, the predictor's validation MSE and cosine similarity next
 to the identity world model's (``z_hat_{t+1} = z_t``), then linear-probes the
-final predictions for next-head position and head displacement.
+final predictions for next-head position, head displacement and change.
 """
 
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
 from dataclasses import asdict
-from pathlib import Path
 
 import torch
 import torch.nn.functional as F  # noqa: N812
 
 from snekwm.config import WorldModelConfig
-from snekwm.data.collect import load_episode
-from snekwm.data.dataset import split_episodes
 from snekwm.data.features import FeatureTransitions
-from snekwm.eval.probe import displacement_probe_data, evaluate, predictor_probe_data
+from snekwm.eval.report import Panel, metrics_table, plot_curves, probe_table
+from snekwm.experiments.common import (
+    Predictor,
+    autocast,
+    load_split,
+    one_cycle,
+    predict,
+    probe_dynamics,
+)
 from snekwm.models.predictor import ActionConditionedPredictor
 from snekwm.results import RunDir
 
-Predictor = Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+PANELS = (
+    Panel("train_loss", "Train loss (MSE)", log=True),
+    Panel(
+        "val_mse",
+        "Validation MSE (lower is better)",
+        baseline="identity_mse",
+        baseline_label="identity",
+    ),
+)
 
 
 def run_dinov2_wm(cfg: WorldModelConfig) -> dict:
@@ -32,10 +44,7 @@ def run_dinov2_wm(cfg: WorldModelConfig) -> dict:
     run = RunDir(cfg.run_dir)
     run.write_json("config.json", cfg)
 
-    paths = sorted(Path(cfg.data_dir).glob("*.npz"))
-    episodes = {p.stem: load_episode(p) for p in paths}
-    train_paths, val_paths = split_episodes(paths, cfg.val_frac, cfg.seed)
-    train, val = [p.stem for p in train_paths], [p.stem for p in val_paths]
+    episodes, train, val = load_split(cfg.data_dir, cfg.val_frac, cfg.seed)
     feats = torch.load(cfg.features_path)
     train_set = FeatureTransitions(feats, episodes, train, cfg.device)
     val_set = FeatureTransitions(feats, episodes, val, cfg.device)
@@ -51,16 +60,14 @@ def run_dinov2_wm(cfg: WorldModelConfig) -> dict:
         residual=cfg.residual,
         use_action=cfg.use_action,
     ).to(cfg.device)
-    opt = torch.optim.AdamW(model.parameters(), cfg.lr, weight_decay=cfg.weight_decay)
     steps = cfg.epochs * math.ceil(len(train_set) / cfg.batch_size)
-    sched = torch.optim.lr_scheduler.OneCycleLR(opt, cfg.lr, total_steps=steps)
+    opt, sched = one_cycle(model.parameters(), cfg.lr, cfg.weight_decay, steps)
     gen = torch.Generator().manual_seed(cfg.seed)
-    n_params = sum(p.numel() for p in model.parameters()) / 1e6
     run.log.info(
         "%d train / %d val transitions, %.1fM params",
         len(train_set),
         len(val_set),
-        n_params,
+        sum(p.numel() for p in model.parameters()) / 1e6,
     )
 
     id_mse, id_cos = _evaluate(lambda z, a: z, val_set, cfg)
@@ -69,7 +76,7 @@ def run_dinov2_wm(cfg: WorldModelConfig) -> dict:
         model.train()
         total, count = 0.0, 0
         for z, a, z1 in train_set.batches(cfg.batch_size, generator=gen):
-            with _autocast(cfg.device):
+            with autocast(cfg.device):
                 loss = F.mse_loss(model(z, a).float(), z1)
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -104,21 +111,44 @@ def run_dinov2_wm(cfg: WorldModelConfig) -> dict:
         {"model": model.state_dict(), "config": asdict(cfg)}, run.path / "final.pt"
     )
 
-    preds = _predict(model, feats, episodes, cfg)
-    results = {
-        "predictor": evaluate(predictor_probe_data, preds, episodes, train, val),
-        "displacement": evaluate(displacement_probe_data, preds, episodes, train, val),
-    }
-    results = {k: v.to_dict() for k, v in results.items()}
+    preds = predict(model, feats, episodes, cfg.batch_size, cfg.device)
+    identity = {k: v[:-1] for k, v in feats.items()}
+    results = probe_dynamics(preds, feats, episodes, train, val)
+    baseline = probe_dynamics(identity, feats, episodes, train, val)
     for name, r in results.items():
         run.log.info("%s probe: R2_joint=%.3f", name, r["r2_joint"])
     run.write_json("probe.json", results)
+    _write_summary(run, cfg, history, {"Identity WM": baseline, cfg.run_dir: results})
     run.close()
     return results
 
 
-def _autocast(device: str) -> torch.autocast:
-    return torch.autocast(device, dtype=torch.bfloat16, enabled=device == "cuda")
+def _write_summary(
+    run: RunDir, cfg: WorldModelConfig, history: list[dict], probes: dict
+) -> None:
+    """Write ``summary.md`` (error + probe tables) and ``curves.png``."""
+    last = history[-1]
+    errors = metrics_table(
+        {
+            "Identity WM": {
+                "val MSE": last["identity_mse"],
+                "val cos": last["identity_cos"],
+            },
+            cfg.run_dir: {"val MSE": last["val_mse"], "val cos": last["val_cos"]},
+        }
+    )
+    plot_curves(history, run.path / "curves.png", cfg.run_dir, PANELS)
+    run.write_text(
+        "summary.md",
+        f"# {cfg.run_dir}\n\n"
+        f"residual={cfg.residual}, use_action={cfg.use_action}, "
+        f"epochs={cfg.epochs}, depth={cfg.depth}, dim={cfg.dim}\n\n"
+        "## Feature-space error (final epoch, validation)\n\n"
+        f"{errors}\n"
+        "## Linear probes (held-out R²_joint)\n\n"
+        f"{probe_table(probes)}\n"
+        "![training curves](curves.png)\n",
+    )
 
 
 @torch.no_grad()
@@ -128,28 +158,9 @@ def _evaluate(
     """Return mean per-element MSE and mean per-token cosine similarity."""
     mse, cos, n = 0.0, 0.0, 0
     for z, a, z1 in data.batches(cfg.batch_size, shuffle=False):
-        with _autocast(cfg.device):
+        with autocast(cfg.device):
             pred = model(z, a).float()
         mse += F.mse_loss(pred, z1, reduction="sum").item() / pred[0].numel()
         cos += F.cosine_similarity(pred, z1, dim=-1).mean(-1).sum().item()
         n += len(z)
     return mse / n, cos / n
-
-
-@torch.no_grad()
-def _predict(
-    model: Predictor, feats: dict, episodes: dict, cfg: WorldModelConfig
-) -> dict[str, torch.Tensor]:
-    """Predict ``z_hat_{t+1}`` for every transition: ``{name: (T, N, D)}``."""
-    out = {}
-    bs = cfg.batch_size
-    for name, f in feats.items():
-        actions = torch.as_tensor(episodes[name]["actions"]).long()
-        chunks = []
-        for i in range(0, len(actions), bs):
-            z = f[i : i + bs][: len(actions[i : i + bs])].to(cfg.device).float()
-            with _autocast(cfg.device):
-                pred = model(z, actions[i : i + bs].to(cfg.device))
-            chunks.append(pred.half().cpu())
-        out[name] = torch.cat(chunks)
-    return out

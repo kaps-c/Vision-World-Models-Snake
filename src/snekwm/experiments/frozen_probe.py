@@ -12,11 +12,13 @@ from snekwm.data.collect import load_episode
 from snekwm.data.dataset import split_episodes
 from snekwm.data.features import encode_episodes
 from snekwm.eval.probe import (
+    change_tensors,
     displacement_probe_data,
     encoder_probe_data,
     evaluate,
     predictor_probe_data,
 )
+from snekwm.eval.report import probe_table
 from snekwm.models.encoders import FrozenDinov2
 from snekwm.results import RunDir
 
@@ -60,10 +62,32 @@ def run_frozen_probe(cfg: ProbeConfig, encoder: nn.Module | None = None) -> dict
         "identity_displacement": evaluate(
             displacement_probe_data, identity, episodes, train, val
         ),
+        "identity_change": evaluate(
+            displacement_probe_data,
+            change_tensors(identity, feats),
+            episodes,
+            train,
+            val,
+        ),
     }
     results = {k: v.to_dict() for k, v in results.items()}
     for name, r in results.items():
         run.log.info("%s probe: R2_joint=%.3f", name, r["r2_joint"])
     run.write_json("probe.json", results)
+    table = probe_table(
+        {
+            "Frozen DINOv2 encoder": {"encoder": results["encoder"]},
+            "Identity WM": {
+                "predictor": results["identity_predictor"],
+                "displacement": results["identity_displacement"],
+                "change": results["identity_change"],
+            },
+        }
+    )
+    run.write_text(
+        "summary.md",
+        "# Frozen DINOv2 probes\n\n"
+        "Held-out linear-probe R²_joint (snake-head position).\n\n" + table,
+    )
     run.close()
     return results

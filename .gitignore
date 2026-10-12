@@ -10,9 +10,9 @@ __pycache__/
 build/
 dist/
 
-# experiment outputs (large; regenerate via CLI)
+# experiment outputs: keep small artefacts (json, md, png, log); ignore checkpoints
 /data/
-/results/
+/results/**/*.pt
 *.pt
 *.npz
 .ipynb_checkpoints/
@@ -27,3 +27,6 @@ dist/
 *.out
 *.synctex.gz
 *.toc
+
+# per-run training logs are part of the results record
+!/results/**/train.log
