@@ -20,6 +20,7 @@ from snekwm.experiments.common import (
     Predictor,
     autocast,
     load_split,
+    log_probes,
     one_cycle,
     predict,
     probe_dynamics,
@@ -115,8 +116,7 @@ def run_dinov2_wm(cfg: WorldModelConfig) -> dict:
     identity = {k: v[:-1] for k, v in feats.items()}
     results = probe_dynamics(preds, feats, episodes, train, val)
     baseline = probe_dynamics(identity, feats, episodes, train, val)
-    for name, r in results.items():
-        run.log.info("%s probe: R2_joint=%.3f", name, r["r2_joint"])
+    log_probes(run.log, "", results)
     run.write_json("probe.json", results)
     _write_summary(run, cfg, history, {"Identity WM": baseline, cfg.run_dir: results})
     run.close()

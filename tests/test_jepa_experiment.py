@@ -38,6 +38,7 @@ def run_tiny(tmp_path, **overrides):
 def test_pixel_jepa_writes_results_with_all_probes_and_rank_history(tmp_path):
     results, run = run_tiny(tmp_path)
     assert {"encoder", "change", "transfer", "transfer_displacement"} <= set(results)
+    assert {"prediction", "identity", "skill"} <= set(results["latent_cosine"])
     history = json.loads((run / "history.json").read_text(encoding="utf-8"))
     assert len(history) == 2
     assert {"train_loss", "val_loss", "val_invariance", "rank_ratio"} <= set(history[0])

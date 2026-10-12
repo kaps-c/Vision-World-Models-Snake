@@ -167,3 +167,17 @@ def test_normalised_transfer_ignores_per_token_scale(tmp_path):
     assert a["transfer"].r2_joint == pytest.approx(b["transfer"].r2_joint, abs=1e-6)
     raw = transfer_probe(scaled, feats, eps, train, val, normalize=False)
     assert raw["transfer"].r2_joint < a["transfer"].r2_joint
+
+
+def test_latent_cosine_compares_predictions_with_copying_the_input():
+    from snekwm.eval.probe import latent_cosine
+
+    eps = {"e": {"alive": np.array([True, True, True, False])}}
+    ref = {"e": torch.randn(4, 3, 8)}
+    perfect = {"e": ref["e"][1:]}
+    res = latent_cosine(perfect, ref, eps, ["e"])
+    assert res["prediction"] == pytest.approx(1.0, abs=1e-5)
+    assert res["identity"] < 1.0
+    assert res["skill"] == pytest.approx(1.0, abs=1e-5)
+    copy = latent_cosine({"e": ref["e"][:-1]}, ref, eps, ["e"])
+    assert copy["skill"] == pytest.approx(0.0, abs=1e-6)

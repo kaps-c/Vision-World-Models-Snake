@@ -34,6 +34,7 @@ from snekwm.experiments.common import (
     encode_all,
     grids_to_images,
     load_split,
+    log_probes,
     one_cycle,
     predict,
     probe_dynamics,
@@ -178,8 +179,7 @@ def _finish(run, cfg, jepa, inputs, prep, episodes, train, val, history) -> dict
     results["collapsed"] = bool(collapsed_epochs)
     results["first_collapse_epoch"] = collapsed_epochs[0] if collapsed_epochs else None
     results["rank_ratio"] = history[-1]["rank_ratio"]
-    for name in ("encoder", "transfer", "transfer_displacement", "displacement"):
-        run.log.info("%s probe: R2_joint=%.3f", name, results[name]["r2_joint"])
+    log_probes(run.log, "", {k: results[k] for k in (*PROBES, "latent_cosine")})
     run.write_json("probe.json", results)
     _write_summary(run, cfg, history, results)
     run.close()
@@ -286,6 +286,7 @@ def _write_summary(run: RunDir, cfg: JEPAConfig, history: list, results: dict) -
         label="Epoch",
     )
     probes = {k: results[k] for k in PROBES}
+    latent = metrics_table({cfg.run_dir: results["latent_cosine"]})
     run.write_text(
         "summary.md",
         f"# {cfg.run_dir}\n\n"
@@ -295,6 +296,8 @@ def _write_summary(run: RunDir, cfg: JEPAConfig, history: list, results: dict) -
         f"{status}\n\n"
         "## Linear probes (held-out R²_joint)\n\n"
         f"{probe_table({cfg.run_dir: probes})}\n"
+        "## Next-latent cosine (skill > 0 beats copying the input)\n\n"
+        f"{latent}\n"
         "## Training\n\n"
         f"{train_table}\n"
         "![training curves](curves.png)\n",

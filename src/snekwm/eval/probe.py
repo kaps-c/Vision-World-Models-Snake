@@ -212,3 +212,37 @@ def action_only_control(
 
 def _pool(tokens: torch.Tensor) -> np.ndarray:
     return tokens.float().mean(dim=1).numpy()
+
+
+def latent_cosine(
+    preds: Mapping[str, torch.Tensor],
+    reference: Mapping[str, torch.Tensor],
+    episodes: Mapping[str, dict[str, np.ndarray]],
+    val: Sequence[str],
+) -> dict[str, float]:
+    """Mean token cosine of predictions vs the true next latent, against copying.
+
+    Returns ``prediction`` = cos(z_hat_{t+1}, z_{t+1}), ``identity`` =
+    cos(z_t, z_{t+1}) and a bounded-above ``skill`` =
+    ``1 - (1 - prediction) / (1 - identity)``: 1 is perfect, 0 is no better
+    than copying the input, negative is worse than copying.
+    """
+    pred_cos, id_cos = [], []
+    for n in val:
+        mask = torch.as_tensor(episodes[n]["alive"][1:])
+        nxt = reference[n][1:].float()[mask]
+        pred_cos.append(
+            torch.nn.functional.cosine_similarity(preds[n].float()[mask], nxt, dim=-1)
+        )
+        id_cos.append(
+            torch.nn.functional.cosine_similarity(
+                reference[n][:-1].float()[mask], nxt, dim=-1
+            )
+        )
+    prediction = float(torch.cat(pred_cos).mean())
+    identity = float(torch.cat(id_cos).mean())
+    return {
+        "prediction": prediction,
+        "identity": identity,
+        "skill": 1.0 - (1.0 - prediction) / max(1.0 - identity, 1e-12),
+    }

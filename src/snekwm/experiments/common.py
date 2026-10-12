@@ -14,6 +14,7 @@ from snekwm.eval.probe import (
     change_tensors,
     displacement_probe_data,
     evaluate,
+    latent_cosine,
     predictor_probe_data,
     transfer_probe,
 )
@@ -85,7 +86,9 @@ def probe_dynamics(
             preds, reference, episodes, train, val, normalize=normalize_transfer
         ),
     }
-    return {k: v.to_dict() for k, v in probes.items()}
+    out = {k: v.to_dict() for k, v in probes.items()}
+    out["latent_cosine"] = latent_cosine(preds, reference, episodes, val)
+    return out
 
 
 def one_cycle(
@@ -121,3 +124,19 @@ def grids_to_images(grids: torch.Tensor, cell_px: int) -> torch.Tensor:
     """Upsample ``(B, L, L, 3)`` grids in ``[0, 255]`` to ``(B, 3, H, W)`` in [0, 1]."""
     x = grids.repeat_interleave(cell_px, 1).repeat_interleave(cell_px, 2)
     return x.permute(0, 3, 1, 2).float().div(255.0)
+
+
+def log_probes(log, prefix: str, results: Mapping[str, dict]) -> None:
+    """Log every probe R^2 (and the latent-cosine skill) in ``results``."""
+    for name, r in results.items():
+        if "r2_joint" in r:
+            log.info("%s%s: R2_joint=%.3f", prefix, name, r["r2_joint"])
+        elif "skill" in r:
+            log.info(
+                "%s%s: cos %.3f vs identity %.3f (skill %.3f)",
+                prefix,
+                name,
+                r["prediction"],
+                r["identity"],
+                r["skill"],
+            )

@@ -11,7 +11,7 @@ from snekwm.config import ProbeConfig
 from snekwm.data.features import encode_episodes
 from snekwm.eval.probe import action_only_control, encoder_probe_data, evaluate
 from snekwm.eval.report import probe_table
-from snekwm.experiments.common import load_split, probe_dynamics
+from snekwm.experiments.common import load_split, log_probes, probe_dynamics
 from snekwm.models.encoders import FrozenDinov2
 from snekwm.results import RunDir
 
@@ -52,8 +52,7 @@ def run_frozen_probe(cfg: ProbeConfig, encoder: nn.Module | None = None) -> dict
         },
     }
     run.log.info("encoder probe: R2_joint=%.3f", results["encoder"]["r2_joint"])
-    for name, r in results["identity"].items():
-        run.log.info("identity %s: R2_joint=%.3f", name, r["r2_joint"])
+    log_probes(run.log, "identity ", results["identity"])
     run.log.info(
         "action-only displacement: R2_joint=%.3f",
         results["action_only"]["displacement"]["r2_joint"],

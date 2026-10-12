@@ -29,7 +29,10 @@ def metrics_table(rows: Mapping[str, Mapping[str, float]], label: str = "Model")
 def probe_table(rows: Mapping[str, Mapping[str, Mapping[str, float]]]) -> str:
     """Render ``{model: {probe: result}}`` as a markdown table of R^2_joint."""
     return metrics_table(
-        {m: {p: r["r2_joint"] for p, r in res.items()} for m, res in rows.items()}
+        {
+            m: {p: r["r2_joint"] for p, r in res.items() if "r2_joint" in r}
+            for m, res in rows.items()
+        }
     )
 
 
