@@ -256,3 +256,30 @@ traced it to mean-pooling scale and picked the metric whose floor is genuinely z
 about 35 s (epoch 3 of run 1, epoch 1 of run 2). The laptop GPU was idling at 330 MHz
 afterwards, so it's likely a power-state or thermal issue or another process. The
 results are unaffected (seeded), but it matters for any wall-clock comparison.
+
+---
+
+## Interlude — Evaluation artefacts, change probe, refactor (before slice 5)
+
+**What.**
+- The **change probe** (`ẑ_{t+1} − z_t → Δhead`) is now an official metric, tested. The
+  identity WM scores exactly **0.000**, a true zero floor.
+- Every run now writes `summary.md` (markdown tables) and `curves.png` (small multiples,
+  validated colour-blind-safe palette, direct labels) next to `history.json` /
+  `probe.json` / `train.log`. These small artefacts are **committed**; checkpoints
+  (`*.pt`) are not.
+- Shared experiment code (split loading, autocast, prediction, probes, optimiser) moved to
+  `experiments/common.py` before the JEPA experiment became a second copy of it. The
+  re-runs reproduce slice 4's numbers to the third decimal.
+
+**Failures.**
+| Symptom | Root cause | Fix | Lesson |
+|---|---|---|---|
+| ruff `E902 stream did not contain valid UTF-8` | Python's `open()` on Windows defaults to **cp1252**; my edit script wrote `²` and `—` in that encoding | Re-encode; `RunDir.write_text` always uses `encoding="utf-8"` | Always pass `encoding=` on Windows. The *runtime* `summary.md` writer had the same latent bug, caught before it shipped |
+| Both files corrupted while "fixing" them | `read_bytes → decode → write_text` turned `\r\n` into `\r\r\n` and split string literals | `git checkout --` the files, then redo the edits with exact-match edits | When a repair breaks things, revert to known-good rather than repairing the repair |
+| A string-replace edit silently didn't apply | The search pattern had escaped newlines that didn't match the file | Use exact-match edit tools, which fail loudly | Prefer edits that error on no-match |
+| Figure: log axis with a single `10⁰` tick; baseline label colliding with the curve | matplotlib's default log locator on a <1 decade range; label anchored at the last epoch, where curves converge | 1-2-5 log locator with plain labels; anchor the baseline label at epoch 1 | Look at every figure before shipping it |
+
+**Observation.** Re-running the same seeded config gives train loss 0.6398 vs 0.6406 at
+epoch 2: **cuDNN/bf16 non-determinism**. The probes agree to about 0.001. I report results to
+3 d.p. and don't claim bit-reproducibility.
