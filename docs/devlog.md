@@ -195,3 +195,64 @@ The metric now has about 7× more dynamic range than the original one.
 
 **Lesson.** State the baseline's exact definition before predicting its value: "predict
 zero" and "best linear guess from the current state" are different floors.
+
+---
+
+## Slice 4 — DINOv2-WM (predictor on frozen DINOv2 features)
+
+**What.**
+- `ActionConditionedPredictor`: a pre-norm transformer over 256 patch tokens plus one
+  learned **action token**, with depth 4, dim 384 (7.5M params). The window is Markovian
+  (one frame), so no block-causal mask is needed; that's documented in the class.
+  Flags: `residual` (predict `z_t + f`, with `f` zero-initialised so it *starts as* the
+  identity WM; this is tested) and `use_action` (for the slice 5 ablation).
+- `FeatureTransitions`: the whole cached split lives **on the GPU** (≈1.4 GB fp16), and
+  batches are indexed straight from it, with no DataLoader overhead.
+- Training: MSE in DINOv2 space, AdamW 3e-4, wd 0.05, OneCycle, bf16 autocast, grad clip
+  1.0, 5 epochs (the write-up's matched budget). Per epoch it logs val MSE/cosine
+  *next to the identity WM's*.
+- `snek wm --config configs/dinov2_wm.toml` → `results/dinov2_wm/{config,history,probe}.json,
+  final.pt, train.log`.
+
+**Results** (val split: 6 held-out episodes, 1,800 transitions).
+| Model | Val MSE ↓ | Val cos ↑ | Predictor probe | Displacement probe |
+|---|---|---|---|---|
+| Identity WM | 0.223 (write-up: 0.221 ✓) | 0.984 | 0.907 | 0.391 |
+| DINOv2-WM (direct) | 0.243 | 0.983 | 0.923 | **0.838** |
+| DINOv2-WM (residual) | **0.134** | **0.990** | 0.929 | 0.556 |
+
+### Finding 1: "loses to identity on MSE" ≠ "learned nothing"
+The direct model never beats copy-the-input on MSE (0.243 vs 0.223). This reproduces the
+write-up, where identity also won raw MSE. **But its displacement probe jumps from
+0.39 to 0.84**, so it clearly learned action-conditioned dynamics. Why the MSE gap: one
+cell changes per step, so roughly 250/256 patches are near-static. A direct predictor
+must *re-synthesise* all of them and pays a small error on each, while the identity WM
+gets them free.
+
+### Finding 2: residual parameterisation beats identity, but the probe says it's worse
+I hypothesised that starting at identity (residual) would beat identity on MSE while keeping
+the dynamics. MSE improved by 40%, **but the displacement probe dropped to 0.556**. Two
+explanations: (a) a probe artefact, where the change is small relative to `z_t` and drowns
+under mean-pooling; or (b) the residual model really learns less dynamics.
+
+**Discriminating test:** probe the predicted change `ẑ_{t+1} − z_t` directly.
+| | ‖Δ‖ / ‖z‖ | Probe on Δ |
+|---|---|---|
+| direct | 0.149 | 0.771 |
+| residual | 0.108 | **0.871** |
+
+→ **(a).** The residual model encodes the dynamics *better*; mean-pooling the full
+prediction hid it. The identity WM's Δ is exactly 0, so this "Δ-probe" has a true zero
+floor, which is the property I wanted in slice 3b.
+
+**Lesson.** A probe measures the representation *and* the readout. When two metrics
+disagree, design one test that separates the hypotheses before believing either.
+
+**Talking point.** "Three metrics ranked the same two models three different ways. MSE
+favoured residual, the pooled probe favoured direct, and the Δ-probe favoured residual. I
+traced it to mean-pooling scale and picked the metric whose floor is genuinely zero."
+
+**Observations (unexplained, not chased).** Some epochs took about 4 min instead of
+about 35 s (epoch 3 of run 1, epoch 1 of run 2). The laptop GPU was idling at 330 MHz
+afterwards, so it's likely a power-state or thermal issue or another process. The
+results are unaffected (seeded), but it matters for any wall-clock comparison.
