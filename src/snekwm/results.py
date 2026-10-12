@@ -10,16 +10,19 @@ from typing import Any
 
 
 class RunDir:
-    """``results/<run>/`` with a ``train.log`` logger and JSON writers."""
+    """``results/<run>/`` with a ``train.log`` logger and JSON writers.
 
-    def __init__(self, path: str | Path):
+    ``log_mode="a"`` appends to an existing log (e.g. when re-probing).
+    """
+
+    def __init__(self, path: str | Path, log_mode: str = "w"):
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
         self.log = logging.getLogger(f"snekwm.{self.path.as_posix()}")
         self.log.setLevel(logging.INFO)
         self.log.handlers.clear()
         for handler in (
-            logging.FileHandler(self.path / "train.log", mode="w"),
+            logging.FileHandler(self.path / "train.log", mode=log_mode),
             logging.StreamHandler(),
         ):
             handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))

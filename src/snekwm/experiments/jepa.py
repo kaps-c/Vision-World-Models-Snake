@@ -16,9 +16,11 @@ After training:
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import asdict
 from functools import partial
+from pathlib import Path
 
 import torch
 
@@ -84,7 +86,6 @@ def run_jepa(cfg: JEPAConfig) -> dict:
     )
 
     history: list[dict] = []
-    first_collapse: int | None = None
     for epoch in range(1, cfg.epochs + 1):
         jepa.train()
         sums = dict.fromkeys(("loss", "inv", "var", "cov"), 0.0)
@@ -124,7 +125,6 @@ def run_jepa(cfg: JEPAConfig) -> dict:
             row["collapsed"] = False
         except CollapseError as err:
             row["rank_ratio"], row["collapsed"] = err.ratio, True
-            first_collapse = first_collapse or epoch
         history.append(row)
         run.log.info(
             "epoch %d  train %.4f (inv %.4f var %.4f cov %.4f)  val %.4f  rank %.3f",
@@ -150,9 +150,33 @@ def run_jepa(cfg: JEPAConfig) -> dict:
         {"model": jepa.state_dict(), "config": asdict(cfg)}, run.path / "final.pt"
     )
 
+    return _finish(run, cfg, jepa, inputs, prep, episodes, train, val, history)
+
+
+def reprobe_jepa(run_dir: str | Path) -> dict:
+    """Recompute probes and summary for a finished run from its checkpoint.
+
+    Evaluation code can then change without retraining; training history is
+    read back from ``history.json``.
+    """
+    run_dir = Path(run_dir)
+    ckpt = torch.load(run_dir / "final.pt")
+    cfg = JEPAConfig(**ckpt["config"])
+    history = json.loads((run_dir / "history.json").read_text(encoding="utf-8"))
+    run = RunDir(run_dir, log_mode="a")
+    episodes, train, val = load_split(cfg.data_dir, cfg.val_frac, cfg.seed)
+    inputs, prep, jepa = _build(cfg, episodes)
+    jepa.load_state_dict(ckpt["model"])
+    run.log.info("reprobe from %s", run_dir / "final.pt")
+    return _finish(run, cfg, jepa, inputs, prep, episodes, train, val, history)
+
+
+def _finish(run, cfg, jepa, inputs, prep, episodes, train, val, history) -> dict:
+    """Probe the trained model, then write ``probe.json`` and the summary."""
+    collapsed_epochs = [h["epoch"] for h in history if h["collapsed"]]
     results = _probe(jepa, inputs, prep, episodes, train, val, cfg)
-    results["collapsed"] = first_collapse is not None
-    results["first_collapse_epoch"] = first_collapse
+    results["collapsed"] = bool(collapsed_epochs)
+    results["first_collapse_epoch"] = collapsed_epochs[0] if collapsed_epochs else None
     results["rank_ratio"] = history[-1]["rank_ratio"]
     for name in ("encoder", "transfer", "transfer_displacement", "displacement"):
         run.log.info("%s probe: R2_joint=%.3f", name, results[name]["r2_joint"])
@@ -224,7 +248,11 @@ def _probe(jepa: JEPA, inputs, prep, episodes, train, val, cfg) -> dict:
 
     preds = predict(step, inputs, episodes, bs, dev)
     encoder = evaluate(encoder_probe_data, online, episodes, train, val).to_dict()
-    return {"encoder": encoder, **probe_dynamics(preds, target, episodes, train, val)}
+    # JEPA's invariance loss is scale-free, so transfer decodes normalised tokens.
+    dynamics = probe_dynamics(
+        preds, target, episodes, train, val, normalize_transfer=True
+    )
+    return {"encoder": encoder, **dynamics}
 
 
 def _write_summary(run: RunDir, cfg: JEPAConfig, history: list, results: dict) -> None:

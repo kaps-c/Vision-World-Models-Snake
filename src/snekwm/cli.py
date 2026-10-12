@@ -48,6 +48,13 @@ def _jepa(args: argparse.Namespace) -> None:
         run_jepa(load_config(config, "jepa", JEPAConfig))
 
 
+def _reprobe(args: argparse.Namespace) -> None:
+    from snekwm.experiments.jepa import reprobe_jepa
+
+    for run_dir in args.run:
+        reprobe_jepa(run_dir)
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     """Parse ``argv`` and run the chosen subcommand."""
     parser = argparse.ArgumentParser(prog="snek")
@@ -64,6 +71,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     p = sub.add_parser("jepa", help="train strict-JEPA run(s)")
     p.add_argument("--config", required=True, nargs="+")
     p.set_defaults(func=_jepa)
+    p = sub.add_parser("reprobe", help="re-evaluate finished JEPA run(s)")
+    p.add_argument("--run", required=True, nargs="+", help="results/jepa/<name>")
+    p.set_defaults(func=_reprobe)
     args = parser.parse_args(argv)
     args.func(args)
 

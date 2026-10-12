@@ -66,3 +66,14 @@ def test_kill_switch_record_mode_trains_full_budget_and_marks_first_collapse(tmp
     history = json.loads((run / "history.json").read_text(encoding="utf-8"))
     assert len(history) == 2
     assert all(h["collapsed"] for h in history)
+
+
+def test_reprobe_reproduces_probes_from_the_saved_checkpoint(tmp_path):
+    from snekwm.experiments.jepa import reprobe_jepa
+
+    results, run = run_tiny(tmp_path)
+    (run / "probe.json").unlink()
+    again = reprobe_jepa(run)
+    assert again["encoder"]["r2_joint"] == results["encoder"]["r2_joint"]
+    assert again["collapsed"] == results["collapsed"]
+    assert (run / "probe.json").exists() and (run / "summary.md").exists()
